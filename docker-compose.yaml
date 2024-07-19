@@ -5,11 +5,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: epub_voice_reader
+    image: ghcr.io/proschu2/proschu2/epub_voice_reader
     volumes:
-      - /Users/sanzio/Documents/Books:/app/data
+      - FOLDER_WITH_FILE_PATH:/app/data
     command: ["python", "/app/epub2tts_edge/epub2tts_edge.py"]
     environment:
       - NLTK_DATA=/app/epub2tts_edge/nltk_data
-      - FILE=Latitante Gentiluomo.epub
+      - FILE=FILE
       - SPEAKER=en-US-AndrewMultilingualNeural
