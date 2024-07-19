@@ -7,6 +7,8 @@ import subprocess
 import time
 import warnings
 import sys
+from pathlib import Path
+import stat
 from tqdm import tqdm
 
 
@@ -24,21 +26,23 @@ import zipfile
 
 
 namespaces = {
-   "calibre":"http://calibre.kovidgoyal.net/2009/metadata",
-   "dc":"http://purl.org/dc/elements/1.1/",
-   "dcterms":"http://purl.org/dc/terms/",
-   "opf":"http://www.idpf.org/2007/opf",
-   "u":"urn:oasis:names:tc:opendocument:xmlns:container",
-   "xsi":"http://www.w3.org/2001/XMLSchema-instance",
+    "calibre": "http://calibre.kovidgoyal.net/2009/metadata",
+    "dc": "http://purl.org/dc/elements/1.1/",
+    "dcterms": "http://purl.org/dc/terms/",
+    "opf": "http://www.idpf.org/2007/opf",
+    "u": "urn:oasis:names:tc:opendocument:xmlns:container",
+    "xsi": "http://www.w3.org/2001/XMLSchema-instance",
 }
 
 warnings.filterwarnings("ignore", module="ebooklib.epub")
+
 
 def ensure_punkt():
     try:
         nltk.data.find("tokenizers/punkt")
     except LookupError:
         nltk.download("punkt")
+
 
 def chap2text_epub(chap):
     blacklist = [
@@ -73,23 +77,27 @@ def chap2text_epub(chap):
 
     return chapter_title_text, paragraphs
 
+
 def get_epub_cover(epub_path):
     try:
         with zipfile.ZipFile(epub_path) as z:
             t = etree.fromstring(z.read("META-INF/container.xml"))
-            rootfile_path =  t.xpath("/u:container/u:rootfiles/u:rootfile",
-                                        namespaces=namespaces)[0].get("full-path")
+            rootfile_path = t.xpath(
+                "/u:container/u:rootfiles/u:rootfile", namespaces=namespaces
+            )[0].get("full-path")
 
             t = etree.fromstring(z.read(rootfile_path))
-            cover_meta = t.xpath("//opf:metadata/opf:meta[@name='cover']",
-                                        namespaces=namespaces)
+            cover_meta = t.xpath(
+                "//opf:metadata/opf:meta[@name='cover']", namespaces=namespaces
+            )
             if not cover_meta:
                 print("No cover image found.")
                 return None
             cover_id = cover_meta[0].get("content")
 
-            cover_item = t.xpath("//opf:manifest/opf:item[@id='" + cover_id + "']",
-                                            namespaces=namespaces)
+            cover_item = t.xpath(
+                "//opf:manifest/opf:item[@id='" + cover_id + "']", namespaces=namespaces
+            )
             if not cover_item:
                 print("No cover image found.")
                 return None
@@ -100,6 +108,7 @@ def get_epub_cover(epub_path):
     except FileNotFoundError:
         print(f"Could not get cover image of {epub_path}")
 
+
 def export(book, sourcefile):
     book_contents = []
     cover_image = get_epub_cover(sourcefile)
@@ -107,14 +116,13 @@ def export(book, sourcefile):
 
     if cover_image is not None:
         image = Image.open(cover_image)
-        image_filename = sourcefile.replace(".epub", ".png")
-        image_path = os.path.join(image_filename)
-        image.save(image_path)
+        image_filename = sourcefile.with_suffix(".png")
+        image.save(image_filename)
         print(f"Cover image saved to {image_path}")
 
     spine_ids = []
     for spine_tuple in book.spine:
-        if spine_tuple[1] == 'yes': # if item in spine is linear
+        if spine_tuple[1] == "yes":  # if item in spine is linear
             spine_ids.append(spine_tuple[0])
 
     items = {}
@@ -128,7 +136,7 @@ def export(book, sourcefile):
             continue
         chapter_title, chapter_paragraphs = chap2text_epub(item.get_content())
         book_contents.append({"title": chapter_title, "paragraphs": chapter_paragraphs})
-    outfile = sourcefile.replace(".epub", ".txt")
+    outfile = sourcefile.with_suffix(".txt")
     check_for_file(outfile)
     print(f"Exporting {sourcefile} to {outfile}")
     author = book.get_metadata("DC", "creator")[0][0]
@@ -138,7 +146,7 @@ def export(book, sourcefile):
         file.write(f"Title: {booktitle}\n")
         file.write(f"Author: {author}\n\n")
         for i, chapter in enumerate(book_contents, start=1):
-            if chapter["paragraphs"] == [] or chapter["paragraphs"] == ['']:
+            if chapter["paragraphs"] == [] or chapter["paragraphs"] == [""]:
                 continue
             else:
                 if chapter["title"] == None:
@@ -146,8 +154,9 @@ def export(book, sourcefile):
                 else:
                     file.write(f"# {chapter['title']}\n\n")
                 for paragraph in chapter["paragraphs"]:
-                    clean = re.sub(r'[\s\n]+', ' ', paragraph)
+                    clean = re.sub(r"[\s\n]+", " ", paragraph)
                     file.write(f"{clean}\n\n")
+
 
 def get_book(sourcefile):
     book_contents = []
@@ -160,12 +169,14 @@ def get_book(sourcefile):
         initialized_first_chapter = False
         lines_skipped = 0
         for line in file:
-            if lines_skipped < 2 and (line.startswith("Title") or line.startswith("Author")):
+            if lines_skipped < 2 and (
+                line.startswith("Title") or line.startswith("Author")
+            ):
                 lines_skipped += 1
-                if line.startswith('Title: '):
-                    book_title = line.replace('Title: ', '').strip()
-                elif line.startswith('Author: '):
-                    book_author = line.replace('Author: ', '').strip()
+                if line.startswith("Title: "):
+                    book_title = line.replace("Title: ", "").strip()
+                elif line.startswith("Author: "):
+                    book_author = line.replace("Author: ", "").strip()
                 continue
             line = line.strip()
             if line.startswith("#"):
@@ -187,8 +198,10 @@ def get_book(sourcefile):
                     initialized_first_chapter = True
                 if any(char.isalnum() for char in line):
                     sentences = sent_tokenize(line)
-                    cleaned_sentences = [s for s in sentences if any(char.isalnum() for char in s)]
-                    line = ' '.join(cleaned_sentences)
+                    cleaned_sentences = [
+                        s for s in sentences if any(char.isalnum() for char in s)
+                    ]
+                    line = " ".join(cleaned_sentences)
                     current_chapter["paragraphs"].append(line)
 
         # Append the last chapter if it contains any paragraphs.
@@ -197,19 +210,16 @@ def get_book(sourcefile):
 
     return book_contents, book_title, book_author, chapter_titles
 
+
 def sort_key(s):
     # extract number from the string
-    return int(re.findall(r'\d+', s)[0])
+    return int(re.findall(r"\d+", s)[0])
+
 
 def check_for_file(filename):
     if os.path.isfile(filename):
-        print(f"The file '{filename}' already exists.")
-        overwrite = input("Do you want to overwrite the file? (y/n): ")
-        if overwrite.lower() != 'y':
-            print("Exiting without overwriting the file.")
-            sys.exit()
-        else:
-            os.remove(filename)
+        os.remove(filename)
+
 
 def append_silence(tempfile, duration=1200):
     audio = AudioSegment.from_file(tempfile)
@@ -219,6 +229,7 @@ def append_silence(tempfile, duration=1200):
     combined = audio + silence
     # Save the combined audio back to file
     combined.export(tempfile, format="flac")
+
 
 def read_book(book_contents, speaker):
     segments = []
@@ -237,7 +248,7 @@ def read_book(book_contents, speaker):
             )
             append_silence("sntnc0.mp3", 1200)
             for pindex, paragraph in enumerate(
-                tqdm(chapter["paragraphs"], desc=f"Processing chapter {i}",unit='pg')
+                tqdm(chapter["paragraphs"], desc=f"Processing chapter {i}", unit="pg")
             ):
                 ptemp = f"pgraphs{pindex}.flac"
                 if os.path.isfile(ptemp):
@@ -272,6 +283,7 @@ def read_book(book_contents, speaker):
             segments.append(partname)
     return segments
 
+
 def generate_metadata(files, author, title, chapter_titles):
     chap = 0
     start_time = 0
@@ -290,16 +302,18 @@ def generate_metadata(files, author, title, chapter_titles):
             chap += 1
             start_time += duration
 
+
 def get_duration(file_path):
     audio = AudioSegment.from_file(file_path)
     duration_milliseconds = len(audio)
     return duration_milliseconds
 
-def make_m4b(files, sourcefile, speaker):
+
+def make_m4b(files, sourcefile):
     filelist = "filelist.txt"
-    basefile = sourcefile.replace(".txt", "")
-    outputm4a = f"{basefile}-{speaker}.m4a"
-    outputm4b = f"{basefile}-{speaker}.m4b"
+    basefile = sourcefile.stem
+    outputm4a = f"{basefile}.m4a"
+    outputm4b = f"{basefile}.m4b"
     with open(filelist, "w") as f:
         for filename in files:
             filename = filename.replace("'", "'\\''")
@@ -341,6 +355,7 @@ def make_m4b(files, sourcefile, speaker):
         os.remove(f)
     return outputm4b
 
+
 def add_cover(cover_img, filename):
     try:
         if os.path.isfile(cover_img):
@@ -353,6 +368,7 @@ def add_cover(cover_img, filename):
     except:
         print(f"Cover image {cover_img} not found")
 
+
 def run_edgespeak(sentence, speaker, filename):
     for speakattempt in range(3):
         try:
@@ -362,15 +378,19 @@ def run_edgespeak(sentence, speaker, filename):
                 raise Exception("Failed to save file from edge_tts") from e
             break
         except Exception as e:
-            print(f"Attempt {speakattempt+1}/3 failed with '{sentence}' in run_edgespeak with error: {e}")
+            print(
+                f"Attempt {speakattempt+1}/3 failed with '{sentence}' in run_edgespeak with error: {e}"
+            )
             # wait a few seconds in case its a transient network issue
             time.sleep(3)
     else:
         print(f"Giving up on sentence '{sentence}' after 3 attempts in run_edgespeak.")
         exit()
 
+
 def run_save(communicate, filename):
     asyncio.run(communicate.save(filename))
+
 
 async def parallel_edgespeak(sentences, speakers, filenames):
     semaphore = asyncio.Semaphore(10)  # Limit the number of concurrent tasks
@@ -380,9 +400,11 @@ async def parallel_edgespeak(sentences, speakers, filenames):
         for sentence, speaker, filename in zip(sentences, speakers, filenames):
             async with semaphore:
                 loop = asyncio.get_running_loop()
-                sentence = re.sub(r'[!]+', '!', sentence)
-                sentence = re.sub(r'[?]+', '?', sentence)
-                task = loop.run_in_executor(executor, run_edgespeak, sentence, speaker, filename)
+                sentence = re.sub(r"[!]+", "!", sentence)
+                sentence = re.sub(r"[?]+", "?", sentence)
+                task = loop.run_in_executor(
+                    executor, run_edgespeak, sentence, speaker, filename
+                )
                 tasks.append(task)
         await asyncio.gather(*tasks)
 
@@ -392,37 +414,65 @@ def main():
         prog="epub2tts-edge",
         description="Read a text file to audiobook format",
     )
-    parser.add_argument("sourcefile", type=str, help="The epub or text file to process")
+    parser.add_argument(
+        "sourcefile", type=str, nargs="?", help="The epub or text file to process"
+    )
     parser.add_argument(
         "--speaker",
         type=str,
         nargs="?",
-        const="en-US-AndrewNeural",
-        default="en-US-AndrewNeural",
+        const="fr-FR-VivienneMultilingualNeural",
+        default="fr-FR-VivienneMultilingualNeural",
         help="Speaker to use (ex en-US-MichelleNeural)",
     )
     parser.add_argument(
-        "--cover",
+        "--folder",
         type=str,
-        help="jpg image to use for cover",
+        help="Folder to save the output files",
+        default="/app/data",
     )
 
     args = parser.parse_args()
-    print(args)
+    source_file = args.sourcefile if args.sourcefile else os.getenv("FILE")
+    assert (
+        source_file
+    ), "No source file provided, pass it as argument or set FILE env variable"
+    source_file = Path(args.folder) / source_file
+    assert source_file.exists, f"File {source_file} not found, pass the correct folder"
 
     ensure_punkt()
 
-    #If we get an epub, export that to txt file, then exit
-    if args.sourcefile.endswith(".epub"):
-        book = epub.read_epub(args.sourcefile)
-        export(book, args.sourcefile)
-        exit()
+    # If we get an epub, export that to txt file, then exit
+    if source_file.suffix == ".epub":
+        book = epub.read_epub(source_file)
+        export(book, source_file)
+    speaker = os.getenv("SPEAKER", args.speaker)
+    txt_file = source_file.with_suffix(".txt")
+    assert txt_file.exists(), f"Text file {txt_file} not found"
+    # Check read permission for the text file
+    if not os.access(txt_file, os.R_OK):
+        raise PermissionError(f"Read permission denied for file {txt_file}")
 
-    book_contents, book_title, book_author, chapter_titles = get_book(args.sourcefile)
-    files = read_book(book_contents, args.speaker)
+    book_contents, book_title, book_author, chapter_titles = get_book(txt_file)
+    files = read_book(book_contents, speaker)
     generate_metadata(files, book_author, book_title, chapter_titles)
-    m4bfilename = make_m4b(files, args.sourcefile, args.speaker)
-    add_cover(args.cover, m4bfilename)
+    m4bfilename = make_m4b(files, txt_file)
+    os.chmod(m4bfilename, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+    cover_img = source_file.with_suffix(".png")
+    if cover_img.exists():
+        # Check read permission for the cover image
+        if not os.access(cover_img, os.R_OK):
+            raise PermissionError(f"Read permission denied for file {cover_img}")
+
+        add_cover(cover_img, m4bfilename)
+        # delete the cover file and txt file
+        cover_img.unlink()
+
+    # Check write permission for the text file before deleting
+    if os.access(txt_file, os.W_OK):
+        txt_file.unlink()
+    else:
+        raise PermissionError(f"Write permission denied for file {txt_file}")
 
 
 if __name__ == "__main__":

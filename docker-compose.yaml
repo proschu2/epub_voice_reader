@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  epub_voice_reader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: epub_voice_reader
+    volumes:
+      - /Users/sanzio/Documents/Books:/app/data
+    command: ["python", "/app/epub2tts_edge/epub2tts_edge.py"]
+    environment:
+      - NLTK_DATA=/app/epub2tts_edge/nltk_data
+      - FILE=Latitante Gentiluomo.epub
+      - SPEAKER=en-US-AndrewMultilingualNeural
