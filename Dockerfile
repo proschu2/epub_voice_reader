@@ -11,10 +11,11 @@ RUN apk update && \
 WORKDIR /app
 
 # Set environment variable for NLTK data
-ENV NLTK_DATA=/app/epub2tts_edge/nltk_data
+ENV NLTK_DATA=/app/nltk_data
 
 # Create the NLTK data directory
 RUN mkdir -p ${NLTK_DATA}
+RUN mkdir -p /app/tmp
 
 # Create a non-root user and switch to it
 RUN adduser -D -h /app appuser && chown -R appuser /app

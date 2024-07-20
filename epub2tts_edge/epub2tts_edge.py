@@ -261,7 +261,7 @@ def read_book(book_contents, speaker, book_title):
                 else:
                     sentences = sent_tokenize(paragraph)
                     filenames = [
-                        tmp_file_folder / "sntnc" + str(z + 1) + ".mp3"
+                        tmp_file_folder / f"sntnc{z+1}.mp3"
                         for z in range(len(sentences))
                     ]
                     speakers = [speaker] * len(sentences)
@@ -322,7 +322,7 @@ def make_m4b(files, sourcefile):
     outputm4b = f"{basefile}.m4b"
     with open(filelist, "w") as f:
         for filename in files:
-            filename = filename.replace("'", "'\\''")
+            filename = str(filename).replace("'", "'\\''")
             f.write(f"file '{filename}'\n")
     ffmpeg_command = [
         "ffmpeg",
