@@ -231,11 +231,14 @@ def append_silence(tempfile, duration=1200):
     combined.export(tempfile, format="flac")
 
 
-def read_book(book_contents, speaker):
+def read_book(book_contents, speaker, book_title):
     segments = []
+    tmp_file_folder = os.getenv("TMP_FOLDER", "/app/tmp")
+    tmp_file_folder = Path(tmp_file_folder) / book_title
+    tmp_file_folder.mkdir(parents=True, exist_ok=True)
     for i, chapter in enumerate(book_contents, start=1):
         files = []
-        partname = f"part{i}.flac"
+        partname = tmp_file_folder / f"part{i}.flac"
         if os.path.isfile(partname):
             print(f"{partname} exists, skipping to next chapter")
             segments.append(partname)
@@ -244,27 +247,30 @@ def read_book(book_contents, speaker):
             if chapter["title"] == "":
                 chapter["title"] = "blank"
             asyncio.run(
-                parallel_edgespeak([chapter["title"]], [speaker], ["sntnc0.mp3"])
+                parallel_edgespeak(
+                    [chapter["title"]], [speaker], [tmp_file_folder / "sntnc0.mp3"]
+                )
             )
-            append_silence("sntnc0.mp3", 1200)
+            append_silence(tmp_file_folder / "sntnc0.mp3", 1200)
             for pindex, paragraph in enumerate(
                 tqdm(chapter["paragraphs"], desc=f"Processing chapter {i}", unit="pg")
             ):
-                ptemp = f"pgraphs{pindex}.flac"
+                ptemp = tmp_file_folder / f"pgraphs{pindex}.flac"
                 if os.path.isfile(ptemp):
                     print(f"{ptemp} exists, skipping to next paragraph")
                 else:
                     sentences = sent_tokenize(paragraph)
                     filenames = [
-                        "sntnc" + str(z + 1) + ".mp3" for z in range(len(sentences))
+                        tmp_file_folder / "sntnc" + str(z + 1) + ".mp3"
+                        for z in range(len(sentences))
                     ]
                     speakers = [speaker] * len(sentences)
                     asyncio.run(parallel_edgespeak(sentences, speakers, filenames))
                     append_silence(filenames[-1], 1200)
                     # combine sentences in paragraph
-                    sorted_files = sorted(filenames, key=sort_key)
-                    if os.path.exists("sntnc0.mp3"):
-                        sorted_files.insert(0, "sntnc0.mp3")
+                    sorted_files = sorted(filenames, key=lambda x: sort_key(x.stem))
+                    if os.path.exists(tmp_file_folder / "sntnc0.mp3"):
+                        sorted_files.insert(0, tmp_file_folder / "sntnc0.mp3")
                     combined = AudioSegment.empty()
                     for file in sorted_files:
                         combined += AudioSegment.from_file(file)
@@ -454,7 +460,7 @@ def main():
         raise PermissionError(f"Read permission denied for file {txt_file}")
 
     book_contents, book_title, book_author, chapter_titles = get_book(txt_file)
-    files = read_book(book_contents, speaker)
+    files = read_book(book_contents, speaker, book_title=source_file.stem)
     generate_metadata(files, book_author, book_title, chapter_titles)
     m4bfilename = make_m4b(files, txt_file)
     os.chmod(m4bfilename, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
@@ -473,6 +479,13 @@ def main():
         txt_file.unlink()
     else:
         raise PermissionError(f"Write permission denied for file {txt_file}")
+
+    # clear the tmp files
+    tmp_folder = os.getenv("TMP_FOLDER", "/app/tmp")
+    tmp_folder = Path(tmp_folder) / source_file.stem
+    for f in tmp_folder.rglob("*"):
+        f.unlink()
+    tmp_folder.rmdir()
 
 
 if __name__ == "__main__":
