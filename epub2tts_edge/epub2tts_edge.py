@@ -315,11 +315,11 @@ def get_duration(file_path):
     return duration_milliseconds
 
 
-def make_m4b(files, sourcefile):
+def make_m4b(files, sourcefile, folder):
     filelist = "filelist.txt"
     basefile = sourcefile.stem
-    outputm4a = f"{basefile}.m4a"
-    outputm4b = f"{basefile}.m4b"
+    outputm4a = str(folder / f"{basefile}.m4a")
+    outputm4b = str(folder / f"{basefile}.m4b")
     with open(filelist, "w") as f:
         for filename in files:
             filename = str(filename).replace("'", "'\\''")
@@ -462,7 +462,7 @@ def main():
     book_contents, book_title, book_author, chapter_titles = get_book(txt_file)
     files = read_book(book_contents, speaker, book_title=source_file.stem)
     generate_metadata(files, book_author, book_title, chapter_titles)
-    m4bfilename = make_m4b(files, txt_file)
+    m4bfilename = make_m4b(files, txt_file, source_file.parent)
     os.chmod(m4bfilename, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
     cover_img = source_file.with_suffix(".png")
     if cover_img.exists():
